@@ -16,7 +16,7 @@ use Getopt::Long qw(HelpMessage);
  
 =head1 SYNOPSIS
  
-  --inbam, -i	  Input bamfile (either this or bam1+2 or fastq or fastq1+2 required)
+  --inbam, -i	  Input bamfile (required)
   --output, -o	  Output path (required)
   --outkey, -k	  Output name stem (defaults to "", and then derived from inbam name minus bamsuffix)
   --bamx, -b	  Bamsuffix for outkey naming purposes (suffix is removed)
@@ -745,13 +745,6 @@ if( -z $blastout ) {
     }
     close FO;
   }
-  #$syscmd = sprintf( "rm %s.R1.fq", $fbaseV );
-  #print($syscmd . "\n");
-  #if( system($syscmd) ) { die "Failed to remove file. Exiting..."; }
-
-  #$syscmd = sprintf( "rm %s.R2.fq", $fbaseV );
-  #print($syscmd . "\n");
-  #if( system($syscmd) ) { die "Failed to remove file. Exiting..."; }
 
   if( !$debug ) {
     $syscmd = sprintf( "rm -rf %s.vel", $fbaseV );
