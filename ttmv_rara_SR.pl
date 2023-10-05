@@ -23,6 +23,7 @@ use Getopt::Long qw(HelpMessage);
   --genome, -g    Genome build (defaults to "hg19"; or can be "hg38")
   --gregion, -gr  geneRegion for read extraction from bam (defaults to "", for RARA exon2+intron2+exon3 + 1kb buffers)
   --taxtype, -tt  Taxonomies for blastn search (defaults to "ttmv" but can also be "anellovirus")
+  --btask, -bt    Blastn task for initial screen of reads (defaults to "megablast" but can be "blastn", "blastn-short", or "dc-megablast")
   --useunmapped, -uu	Option to include all unmapped reads and their paired reads in the blastn search (defaults to false)
   --suppvelvet, -sv	Option to supplement velvet input with unresolved soft-clipped reads to RARA geneRegion (default to true)
   --debug -d      Keep intermediate files for debugging
@@ -38,6 +39,7 @@ GetOptions(
   "genome|g=s" => \(my $genome = "hg19"),
   "gregion|gr=s" => \( my $geneRegion = "" ), 
   "taxtype|tt=s" => \( my $taxtype = "ttmv" ), # ttmv or anellovirus 
+  "btask|bt=s" => \( my $btask = "megablast" ), # blastn may be better for reads, ?megablast for contigs 
   "useunmapped|uu=s" => \( my $useunmapped = 0 ), 
   "suppvelvet|sv=s" => \( my $suppvelvet = 1 ),
   "debug|d" => \ (my $debug = 0 ),
@@ -133,11 +135,11 @@ if( system($syscmd) ) { die "Failed samtools extract by read names. Exiting...";
 
 my $blastout = sprintf( "%s_%s.out", $fbase, $taxtype );
 if( $taxtype eq "ttmv" ) {
-  $syscmd = sprintf( "time %s -query %s_screen.fa -db %s -taxids %s -outfmt 6 -out %s",
-	$blastncmd, $fbase, $blastdb, $taxid, $blastout );
+  $syscmd = sprintf( "time %s -query %s_screen.fa -db %s -task %s -taxids %s -outfmt 6 -out %s",
+	$blastncmd, $fbase, $blastdb, $btask, $taxid, $blastout );
 } else {
-  $syscmd = sprintf( "time %s -query %s_screen.fa -db %s -taxidlist %s -outfmt 6 -out %s",
-	$blastncmd, $fbase, $blastdb, $taxid, $blastout );
+  $syscmd = sprintf( "time %s -query %s_screen.fa -db %s -task %s -taxidlist %s -outfmt 6 -out %s",
+	$blastncmd, $fbase, $blastdb, $btask, $taxid, $blastout );
 }
 print($syscmd . "\n");
 if( system($syscmd) ) { die "Failed blastn. Exiting..."; }
@@ -792,5 +794,8 @@ if( -z $blastout ) {
 
 if( !$debug ) {
   $syscmd = sprintf( "rm %s_screen*", $fbase );
+  print($syscmd . "\n"); system($syscmd); 
+
+  $syscmd = sprintf( "rm %s_header_chr17.txt", $fbase );
   print($syscmd . "\n"); system($syscmd); 
 }
