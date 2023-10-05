@@ -1,1 +1,22 @@
 # ttmv_rara_SR
+ttmv_rara_SR is a perl script for detecting and characaterizing TTMV-RARA fusions in paired-end NGS data.
+
+## Version 1.0
+First commit.
+Type "perl ttmv_rara_SR.pl" for usage and options.
+Before using for the first time, modify variables $samcmd, $blastncmd, $vgcmd, $vhcmd, $bwacmd, $bwahg19, $bwahg39, and $blastdb as needed.<br>
+Input: bamfile [case.bam] including unmapped reads (otherwise realign, ideally with a local aligner such as bwa mem)<br>
+Output:
+1. case_ttmv.out: output from blastn to ttmv taxonomy id
+2. case_results_SR_all.out: summary stats and junctions of ttmv-rara split-reads
+3. case_results_SR_genbankID.out: details of ttmv-rara split-reads between ttmv genbankID and RARA
+4. case_results_SRnohg_all.out: summary stats and junctions of ttmv split-reads (no supp alignment to rara/hg19)
+5. case_results_SRnohg_genbankID.out: details of ttmv split-reads to ttmv genbankID
+6. case_results_SRnone_all.out: summary stats of ttmv non-split reads (no supp alignment)
+7. results_SRnone/case_results_SRnone_genbankID.out: details of ttmv non-split reads
+8. case_results_vel_<settings>.out: alignments and SR junctions of velvet contigs generated from velvet <settings>
+9. case_vel_<settings>.fa: sequences of velvet contigs generated from velvet <settings>
+10. case_vel_<settings>.out: output from blastn of velvet contigs to ttmv taxonomy id
+
+Velvet details:<br>
+velvet <setting> currently range over vbase (no options), vauto (-cov_cutoff auto), and vccN (-cov_cutoff N -min_contig_lgth 200) for N = 10, 20, 50, 100. 
