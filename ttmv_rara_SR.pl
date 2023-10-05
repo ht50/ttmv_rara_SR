@@ -39,7 +39,7 @@ GetOptions(
   "genome|g=s" => \(my $genome = "hg19"),
   "gregion|gr=s" => \( my $geneRegion = "" ), 
   "taxtype|tt=s" => \( my $taxtype = "ttmv" ), # ttmv or anellovirus 
-  "btask|bt=s" => \( my $btask = "megablast" ), # blastn may be better for reads, ?megablast for contigs 
+  "btask|bt=s" => \( my $btask = "megablast" ),
   "useunmapped|uu=s" => \( my $useunmapped = 0 ), 
   "suppvelvet|sv=s" => \( my $suppvelvet = 1 ),
   "debug|d" => \ (my $debug = 0 ),
