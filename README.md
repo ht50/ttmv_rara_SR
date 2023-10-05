@@ -2,10 +2,11 @@
 ttmv_rara_SR is a perl script for detecting and characaterizing TTMV-RARA fusions in paired-end NGS data.
 
 ## Version 1.0
-First commit.
+First commit.<br>
 Type "perl ttmv_rara_SR.pl" for usage and options.<br>
-Before using for first time, modify $samcmd, $blastncmd, $vgcmd, $vhcmd, $bwacmd, $bwahg19, $bwahg39, and $blastdb as needed.<br>
-Input: bamfile [case.bam] including unmapped reads (otherwise realign, ideally with a local aligner such as bwa mem)<br>
+Before using, modify $samcmd, $blastncmd, $vgcmd, $vhcmd, $bwacmd, $bwahg19, $bwahg38, $blastdb.<br><br>
+Input:<br>
+bamfile [case.bam] including unmapped reads (otherwise realign, ideally with a local aligner such as bwa mem)<br>
 Output:
 1. case_ttmv.out: output from blastn to ttmv taxonomy id
 2. case_results_SR_all.out: summary stats and junctions of ttmv-rara split-reads
