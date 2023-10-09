@@ -25,6 +25,7 @@ use Getopt::Long qw(HelpMessage);
   --taxtype, -tt  Taxonomies for blastn search (defaults to "ttmv" but can also be "anellovirus")
   --btask, -bt    Blastn task for initial screen of reads (defaults to "megablast" but can be "blastn", "blastn-short", or "dc-megablast")
   --useunmapped, -uu	Option to include all unmapped reads and their paired reads in the blastn search (defaults to false)
+  --velvet, -vv		Option to perform velvet (defaults to false)
   --suppvelvet, -sv	Option to supplement velvet input with unresolved soft-clipped reads to RARA geneRegion (default to true)
   --debug -d      Keep intermediate files for debugging
   --help, -h      Print this help
@@ -41,6 +42,7 @@ GetOptions(
   "taxtype|tt=s" => \( my $taxtype = "ttmv" ), # ttmv or anellovirus 
   "btask|bt=s" => \( my $btask = "megablast" ),
   "useunmapped|uu=s" => \( my $useunmapped = 0 ), 
+  "velvet|vv=s" => \( my $velvet = 0 ),
   "suppvelvet|sv=s" => \( my $suppvelvet = 1 ),
   "debug|d" => \ (my $debug = 0 ),
   "help|h" => sub { HelpMessage(0) },
@@ -146,6 +148,14 @@ if( system($syscmd) ) { die "Failed blastn. Exiting..."; }
 
 if( -z $blastout ) {
   print( "No blastn hits to " . $taxtype . ".\n" );
+
+  if( !$debug ) {
+    $syscmd = sprintf( "rm %s_screen*", $fbase );
+    print($syscmd . "\n"); system($syscmd); 
+
+    $syscmd = sprintf( "rm %s_header_chr17.txt", $fbase );
+    print($syscmd . "\n"); system($syscmd); 
+  }
 } else {
   $syscmd = sprintf( "time cut -f 1 %s | sed 's/\\\/1\$//g' | sed 's/\\\/2\$//g' | sort -u > %s_%s_reads.txt",
 	$blastout, $fbase, $taxtype );
@@ -466,6 +476,29 @@ if( -z $blastout ) {
     close FO;
   }
 
+  if( !$velvet ) {
+    if( !$debug ) {
+      $syscmd = sprintf( "rm %s_screen*", $fbase );
+      print($syscmd . "\n"); system($syscmd); 
+
+      $syscmd = sprintf( "rm %s_header_chr17.txt", $fbase );
+      print($syscmd . "\n"); system($syscmd); 
+
+      $syscmd = sprintf( "rm %s_%s*.fq", $fbase, $taxtype );
+      print($syscmd . "\n"); system($syscmd);
+
+      $syscmd = sprintf( "rm %s_%s.bam", $fbase, $taxtype );
+      print($syscmd . "\n"); system($syscmd);
+
+      $syscmd = sprintf( "rm %s_%s_bwa.sam", $fbase, $taxtype );
+      print($syscmd . "\n"); system($syscmd);
+
+      $syscmd = sprintf( "rm %s_%s_reads.txt", $fbase, $taxtype );
+      print($syscmd . "\n"); system($syscmd);
+    }
+    exit(0);
+  }
+
   my $fbaseV = $fbase . "_vel"; 
   my %vreads = ();
   open(FI, $fbase . "_" . $taxtype . "_reads.txt") or die $!;
@@ -749,6 +782,33 @@ if( -z $blastout ) {
   }
 
   if( !$debug ) {
+    $syscmd = sprintf( "rm %s_screen*", $fbase );
+    print($syscmd . "\n"); system($syscmd); 
+
+    $syscmd = sprintf( "rm %s_header_chr17.txt", $fbase );
+    print($syscmd . "\n"); system($syscmd); 
+
+    $syscmd = sprintf( "rm %s_%s*.fq", $fbase, $taxtype );
+    print($syscmd . "\n"); system($syscmd);
+
+    $syscmd = sprintf( "rm %s_%s.bam", $fbase, $taxtype );
+    print($syscmd . "\n"); system($syscmd);
+
+    $syscmd = sprintf( "rm %s_%s_bwa.sam", $fbase, $taxtype );
+    print($syscmd . "\n"); system($syscmd);
+
+    $syscmd = sprintf( "rm %s_%s_reads.txt", $fbase, $taxtype );
+    print($syscmd . "\n"); system($syscmd);
+
+    $syscmd = sprintf( "rm %s*.fq", $fbaseV );
+    print($syscmd . "\n"); system($syscmd);
+
+    $syscmd = sprintf( "rm %s_reads.txt", $fbaseV );
+    print($syscmd . "\n"); system($syscmd);
+
+    $syscmd = sprintf( "rm %s.bam", $fbaseV );
+    print($syscmd . "\n"); system($syscmd);
+
     $syscmd = sprintf( "rm -rf %s.vel", $fbaseV );
     print($syscmd . "\n");
     if( system($syscmd) ) { die "Failed to remove velvet output. Exiting..."; }
@@ -767,35 +827,6 @@ if( -z $blastout ) {
         print($syscmd . "\n"); system($syscmd);
       }
     }
-
-    $syscmd = sprintf( "rm %s*.fq", $fbaseV );
-    print($syscmd . "\n"); system($syscmd);
-
-    $syscmd = sprintf( "rm %s_reads.txt", $fbaseV );
-    print($syscmd . "\n"); system($syscmd);
-
-    $syscmd = sprintf( "rm %s.bam", $fbaseV );
-    print($syscmd . "\n"); system($syscmd);
-
-    $syscmd = sprintf( "rm %s_%s*.fq", $fbase, $taxtype );
-    print($syscmd . "\n"); system($syscmd);
-
-    $syscmd = sprintf( "rm %s_%s.bam", $fbase, $taxtype );
-    print($syscmd . "\n"); system($syscmd);
-
-    $syscmd = sprintf( "rm %s_%s_bwa.sam", $fbase, $taxtype );
-    print($syscmd . "\n"); system($syscmd);
-
-    $syscmd = sprintf( "rm %s_%s_reads.txt", $fbase, $taxtype );
-    print($syscmd . "\n"); system($syscmd);
   }
-
 }
 
-if( !$debug ) {
-  $syscmd = sprintf( "rm %s_screen*", $fbase );
-  print($syscmd . "\n"); system($syscmd); 
-
-  $syscmd = sprintf( "rm %s_header_chr17.txt", $fbase );
-  print($syscmd . "\n"); system($syscmd); 
-}
