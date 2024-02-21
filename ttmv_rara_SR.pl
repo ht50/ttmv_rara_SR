@@ -29,8 +29,8 @@ use Getopt::Long qw(HelpMessage);
   --kmer, -km		Option to toggle kmer used by velvet (defaults to 21)
   --trinity, -ty	Option to perform trinity (defaults to false)
   --suppassembly, -sa	Option to supplement assembly input with unresolved soft-clipped reads to RARA geneRegion (default to true)
-  --maxmem -mm		Maximum memory for trinity
-  --debug -d      Keep intermediate files for debugging
+  --maxmem, -mm		Maximum memory for trinity
+  --debug, -d      Keep intermediate files for debugging
   --help, -h      Print this help
  
 =cut
