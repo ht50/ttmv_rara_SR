@@ -26,7 +26,10 @@ use Getopt::Long qw(HelpMessage);
   --btask, -bt    Blastn task for initial screen of reads (defaults to "megablast" but can be "blastn", "blastn-short", or "dc-megablast")
   --useunmapped, -uu	Option to include all unmapped reads and their paired reads in the blastn search (defaults to false)
   --velvet, -vv		Option to perform velvet (defaults to false)
-  --suppvelvet, -sv	Option to supplement velvet input with unresolved soft-clipped reads to RARA geneRegion (default to true)
+  --kmer, -km		Option to toggle kmer used by velvet (defaults to 21)
+  --trinity, -ty	Option to perform trinity (defaults to false)
+  --suppassembly, -sa	Option to supplement assembly input with unresolved soft-clipped reads to RARA geneRegion (default to true)
+  --maxmem -mm		Maximum memory for trinity
   --debug -d      Keep intermediate files for debugging
   --help, -h      Print this help
  
@@ -43,7 +46,10 @@ GetOptions(
   "btask|bt=s" => \( my $btask = "megablast" ),
   "useunmapped|uu=s" => \( my $useunmapped = 0 ), 
   "velvet|vv=s" => \( my $velvet = 0 ),
-  "suppvelvet|sv=s" => \( my $suppvelvet = 1 ),
+  "kmer|km=s" => \( my $kmer = 21 ),
+  "trinity|ty=s" => \( my $trinity = 0 ),
+  "suppassembly|sa=s" => \( my $suppassembly = 1 ),
+  "maxmem|mm=s" => \( my $maxmem = "12G" ),
   "debug|d" => \ (my $debug = 0 ),
   "help|h" => sub { HelpMessage(0) },
 ) or HelpMessage(1);
@@ -56,6 +62,7 @@ my $blastncmd = "blastn";	# tested with BLAST+ version 2.13.0
 my $vgcmd = "velvetg";		# tested with velvet version 1.2.10
 my $vhcmd = "velveth";
 my $bwacmd = "bwa";		# tested with bwa version 0.7.17-r1188
+my $trinitycmd = "trinity";	# tested with trinity version 2.5.1
 
 # These files should be present or changed to their locations
 my $bwahg19 = "/reference_databases/ReferenceGenome/hg19/UCSC/hg19/Sequence/BWAIndex/genome.fa";
@@ -476,7 +483,7 @@ if( -z $blastout ) {
     close FO;
   }
 
-  if( !$velvet ) {
+  if( !$velvet && !$trinity ) {
     if( !$debug ) {
       $syscmd = sprintf( "rm %s_screen*", $fbase );
       print($syscmd . "\n"); system($syscmd); 
@@ -499,13 +506,14 @@ if( -z $blastout ) {
     exit(0);
   }
 
-  my $fbaseV = $fbase . "_vel"; 
-  my %vreads = ();
+  my $fbaseA = $fbase . "_asm"; 
+  my $fbaseT = $fbase . "_tmp"; 
+  my %areads = (); # input reads for assembly
   open(FI, $fbase . "_" . $taxtype . "_reads.txt") or die $!;
-  while(<FI>) { chomp; $vreads{$_} = 1; }
+  while(<FI>) { chomp; $areads{$_} = 1; }
   close FI;
 
-  if( $suppvelvet ) {
+  if( $suppassembly ) {
     $syscmd = sprintf( "time %s view %s_screen.bam > %s_screen.sam", $samcmd, $fbase, $fbase );
     print($syscmd . "\n");
     if( system($syscmd) ) { die "Failed samtools bam to sam. Exiting..."; }
@@ -555,69 +563,104 @@ if( -z $blastout ) {
           if( ( $cigar =~ /^(\d+)H(\d+)M/ && $1<=$buffer && $2 >= $mt && $cells[4] eq "-" ) ||
               ( $cigar =~ /(\d+)M(\d+)H$/ && $2<=$buffer && $1 >= $mt && $cells[4] eq "+" ) ) { $alnRight = 1; }
         }
-        if( $alnLeft == 0 || $alnRight == 0 ) { $vreads{$read} = 1; }
+        if( $alnLeft == 0 || $alnRight == 0 ) { $areads{$read} = 1; }
       }
     }
   }
 
-  open(FO, ">" . $fbaseV . "_reads.txt" ) or die $!;
-  foreach( keys %vreads ) { print FO $_ . "\n"; }
+  open(FO, ">" . $fbaseA . "_reads.txt" ) or die $!;
+  foreach( keys %areads ) { print FO $_ . "\n"; }
   close FO; 
 
-  $syscmd = sprintf( "time %s view -b %s_screen.bam -N %s_reads.txt -o %s.bam", $samcmd, $fbase, $fbaseV, $fbaseV );
+  $syscmd = sprintf( "time %s view -b %s_screen.bam -N %s_reads.txt -o %s.bam", $samcmd, $fbase, $fbaseA, $fbaseA );
   print($syscmd . "\n");
-  if( system($syscmd) ) { die "Failed samtools extract by velvet read names. Exiting..."; }
+  if( system($syscmd) ) { die "Failed samtools extract by assembly read names. Exiting..."; }
 
   $syscmd = sprintf( "time %s collate -O %s.bam | %s fastq -1 %s.R1.fq -2 %s.R2.fq",
- 	$samcmd, $fbaseV, $samcmd, $fbaseV, $fbaseV );
+ 	$samcmd, $fbaseA, $samcmd, $fbaseT, $fbaseT );
   print($syscmd . "\n");
   if( system($syscmd) ) { die "Failed samtools conversion to fastq. Exiting..."; }
 
-  $syscmd = sprintf( "time %s %s.vel 21 -fastq -shortPaired %s.R1.fq %s.R2.fq", $vhcmd, $fbaseV, $fbaseV, $fbaseV );
-  print($syscmd . "\n");
-  if( system($syscmd) ) { die "Failed velveth. Exiting..."; }
+  open(FI, $fbaseT . ".R1.fq") or die $!;
+  open(FO, ">" . $fbaseA . ".R1.fq") or die $!;
+  while(<FI>) {
+    chomp; print FO $_ . "/1\n";
+    $_ = <FI>; print FO $_;
+    $_ = <FI>; print FO $_;
+    $_ = <FI>; print FO $_;
+  }
+  close FI;
+  close FO;
 
-  my @typesV = ( "vcc100", "vcc50", "vcc20", "vcc10", "vbase", "vauto" );
+  open(FI, $fbaseT . ".R2.fq") or die $!;
+  open(FO, ">" . $fbaseA . ".R2.fq") or die $!;
+  while(<FI>) {
+    chomp; print FO $_ . "/2\n";
+    $_ = <FI>; print FO $_;
+    $_ = <FI>; print FO $_;
+    $_ = <FI>; print FO $_;
+  }
+  close FI;
+  close FO;
 
-  foreach my $typeV (@typesV) { 
-    my $fastaV = sprintf( "%s_%s.fa", $fbaseV, $typeV );
-    my $blastoutV = sprintf( "%s_%s.out", $fbaseV, $typeV );
-    my $samV = sprintf( "%s_%s.sam", $fbaseV, $typeV );
+  if( $velvet ) {
+    $syscmd = sprintf( "time %s %s.vel %s -fastq -short %s.R1.fq %s.R2.fq", $vhcmd, $fbaseA, $kmer, $fbaseA, $fbaseA );
+    print($syscmd . "\n");
+    if( system($syscmd) ) { die "Failed velveth. Exiting..."; }
+  }
 
-    if( $typeV eq "vbase" ) {
-      $syscmd = sprintf( "time %s %s.vel", $vgcmd, $fbaseV );
-    } elsif( $typeV eq "vauto" ) {
-      $syscmd = sprintf( "time %s %s.vel -cov_cutoff auto", $vgcmd, $fbaseV );
+  my @typesA = ();
+  if( $velvet ) { push( @typesA, ( "vcc100", "vcc50", "vcc20", "vcc10", "vbase", "vauto" ) ); }
+  if( $trinity ) { push( @typesA, "trinity" ); }
+  foreach my $typeA (@typesA) { 
+    my $fastaA = sprintf( "%s_%s.fa", $fbaseA, $typeA );
+    my $blastoutA = sprintf( "%s_%s.out", $fbaseA, $typeA );
+    my $samA = sprintf( "%s_%s.sam", $fbaseA, $typeA );
+
+    if( $typeA eq "trinity" ) {
+      $syscmd = sprintf( "Trinity --seqType fq --left %s.R1.fq --right %s.R2.fq --max_memory %s --output %s/trinity_out_dir", 
+	$fbaseA, $fbaseA, $maxmem, $outpath );
+    } elsif( $typeA eq "vbase" ) {
+      $syscmd = sprintf( "time %s %s.vel", $vgcmd, $fbaseA );
+    } elsif( $typeA eq "vauto" ) {
+      $syscmd = sprintf( "time %s %s.vel -cov_cutoff auto", $vgcmd, $fbaseA );
     } else {
-      my $vcc = $typeV; $vcc =~ s/vcc//;
-      $syscmd = sprintf( "time %s %s.vel -cov_cutoff %s -min_contig_lgth 200", $vgcmd, $fbaseV, $vcc );
+      my $vcc = $typeA; $vcc =~ s/vcc//;
+      $syscmd = sprintf( "time %s %s.vel -cov_cutoff %s -min_contig_lgth 200", $vgcmd, $fbaseA, $vcc );
     } 
     print($syscmd . "\n");
-    if( system($syscmd) ) { die "Failed velvetg. Exiting..."; }
-    $syscmd = sprintf( "mv %s.vel/contigs.fa %s", $fbaseV, $fastaV );
-    print($syscmd . "\n");
-    if( system($syscmd) ) { die "Failed to move velvetg output. Exiting..."; }
+    if( system($syscmd) ) { die "Failed assembly step " . $typeA . ". Exiting..."; }
 
-    if( -z $fastaV ) { next; }
+    if( $typeA eq "trinity" ) {
+      $syscmd = sprintf( "cp %s/trinity_out_dir/Trinity.fasta %s", $outpath, $fastaA );
+      print($syscmd . "\n");
+      if( system($syscmd) ) { die "Failed to copy trinity output. Exiting..."; }
+    } else {
+      $syscmd = sprintf( "mv %s.vel/contigs.fa %s", $fbaseA, $fastaA );
+      print($syscmd . "\n");
+      if( system($syscmd) ) { die "Failed to move velvetg output. Exiting..."; }
+    }
+
+    if( -z $fastaA ) { next; }
 
     if( $taxtype eq "ttmv" ) {
       $syscmd = sprintf( "time %s -query %s_%s.fa -db %s -taxids %s -outfmt 6 -out %s",
-  	$blastncmd, $fbaseV, $typeV, $blastdb, $taxid, $blastoutV );
+  	$blastncmd, $fbaseA, $typeA, $blastdb, $taxid, $blastoutA );
     } else {
       $syscmd = sprintf( "time %s -query %s_%s.fa -db %s -taxidlist %s -outfmt 6 -out %s",
-	$blastncmd, $fbaseV, $typeV, $blastdb, $taxid, $blastoutV );
+	$blastncmd, $fbaseA, $typeA, $blastdb, $taxid, $blastoutA );
     }
     print($syscmd . "\n");
     if( system($syscmd) ) { die "Failed blastn. Exiting..."; }
 
-    if( -z $blastoutV ) { next; }
+    if( -z $blastoutA ) { next; }
 
-    $syscmd = sprintf( "%s mem -O 6 -T 20 %s %s > %s", $bwacmd, $bwaindex, $fastaV, $samV );
+    $syscmd = sprintf( "%s mem -O 6 -T 20 %s %s > %s", $bwacmd, $bwaindex, $fastaA, $samA );
     print($syscmd . "\n");
     if( system($syscmd) ) { die "Failed bwa mem. Exiting..."; }
 
     my %adetsV = (); my %bdetsV = (); my %cdetsV = (); my %seqsV = ();
-    open( FI, $blastoutV ) or die $!;
+    open( FI, $blastoutA ) or die $!;
     while(<FI>) {
       chomp;
       @cells = split( /\t/, $_ );
@@ -627,7 +670,7 @@ if( -z $blastout ) {
     }
     close FI;
 
-    open( FI, $samV ) or die $!;
+    open( FI, $samA ) or die $!;
     while(<FI>) {
       if( !/^\@/ ) {
         chomp;
@@ -769,7 +812,7 @@ if( -z $blastout ) {
       }
     }
 
-    open( FO, ">" . $fbase . "_results_vel_" . $typeV . ".out" ) or die $!;
+    open( FO, ">" . $fbase . "_results_asm_" . $typeA . ".out" ) or die $!;
     foreach my $skey ( sort {$smSRV{$b}<=>$smSRV{$a}} keys %smSRV ) {
       @cells = split(/,/, $skey);
       $readname = $cells[0]; $ttid = $cells[1]; $bkbin = $cells[2];
@@ -800,33 +843,38 @@ if( -z $blastout ) {
     $syscmd = sprintf( "rm %s_%s_reads.txt", $fbase, $taxtype );
     print($syscmd . "\n"); system($syscmd);
 
-    $syscmd = sprintf( "rm %s*.fq", $fbaseV );
+    $syscmd = sprintf( "rm %s*.fq", $fbaseT );
     print($syscmd . "\n"); system($syscmd);
 
-    $syscmd = sprintf( "rm %s_reads.txt", $fbaseV );
+    $syscmd = sprintf( "rm %s_reads.txt", $fbaseA );
     print($syscmd . "\n"); system($syscmd);
 
-    $syscmd = sprintf( "rm %s.bam", $fbaseV );
+    $syscmd = sprintf( "rm %s.bam", $fbaseA );
     print($syscmd . "\n"); system($syscmd);
 
-    $syscmd = sprintf( "rm -rf %s.vel", $fbaseV );
-    print($syscmd . "\n");
-    if( system($syscmd) ) { die "Failed to remove velvet output. Exiting..."; }
-
-    foreach my $typeV (@typesV) { 
-      if( -e $fbaseV . "_" . $typeV . ".sam" ) { 
-        $syscmd = sprintf( "rm %s_%s.sam", $fbaseV, $typeV );
+    foreach my $typeA (@typesA) { 
+      if( -e $fbaseA . "_" . $typeA . ".sam" ) { 
+        $syscmd = sprintf( "rm %s_%s.sam", $fbaseA, $typeA );
         print($syscmd . "\n"); system($syscmd);
       }
-      if( -z $fbaseV . "_" . $typeV . ".out" ) { 
-        $syscmd = sprintf( "rm %s_%s.out", $fbaseV, $typeV );
+      if( -z $fbaseA . "_" . $typeA . ".out" ) { 
+        $syscmd = sprintf( "rm %s_%s.out", $fbaseA, $typeA );
         print($syscmd . "\n"); system($syscmd);
       }
-      if( -z $fbaseV . "_" . $typeV . ".fa" ) { 
-        $syscmd = sprintf( "rm %s_%s.fa", $fbaseV, $typeV );
+      if( -z $fbaseA . "_" . $typeA . ".fa" ) { 
+        $syscmd = sprintf( "rm %s_%s.fa", $fbaseA, $typeA );
         print($syscmd . "\n"); system($syscmd);
       }
     }
+
+    $syscmd = sprintf( "rm -rf %s.vel", $fbaseA );
+    print($syscmd . "\n");
+    if( system($syscmd) ) { die "Failed to remove velvet output. Exiting..."; }
+
+    sleep(10);    
+    $syscmd = sprintf( "rm -rf %s/trinity_out_dir", $outpath );
+    print($syscmd . "\n");
+    if( system($syscmd) ) { die "Failed to remove trinity output. Exiting..."; }
   }
 }
 
